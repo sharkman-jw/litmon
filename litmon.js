@@ -1,189 +1,195 @@
-
 var litmon = (function() {
-  
-  function createStoreLSKey(storeName) {
-    return '_lm#s#' + storeName;
-  };
-  function createEntryLSKey(storeName, entryID) {
-    return '_lm#e#' + entryID + '@' + storeName;
-  };
-  function createEntryLSKeyRegex(storeName) {
-    return new RegExp('^_lm#e#(\\d+)@' + storeName);
-  };
-  
-  
-  
+
   /**
    * @class Base class for localStorage storable classes.
    */
-  function StorableObj() {
+  function LSObj() {
     this.lsKey = null;
+  };
+  LSObj.retrieve = function(lsKey, classPrototype) {
+    var val = localStorage.getItem(lsKey);
+    if (val == 'null' || val == 'undefined')
+      return null;
+    obj = JSON.parse(val);
+    if (classPrototype)
+      obj.__proto__ = classPrototype;
+    return obj;
   };
   /**
    * Save entry to local storage.
    */
-  StorableObj.prototype.save = function() {
+  LSObj.prototype.save = function() {
     if (this.lsKey)
       localStorage.setItem(this.lsKey, this.json());
-    else
-    {
-      this.genLocalStorageKey();
-      if (this.lsKey)
-        localStorage.setItem(this.lsKey, this.json());
-    }
   };
   /**
    * Remove entry from local storage.
    */
-  StorableObj.prototype.destroy = function() {
+  LSObj.prototype.destroy = function() {
     if (this.lsKey)
-      localStorage.remove(this.lsKey);
-    else
-    {
-      this.genLocalStorageKey();
-      if (this.lsKey)
-        localStorage.remove(this.lsKey);
-    }
+      localStorage.removeItem(this.lsKey);
   };
   /**
    * JSON string of data to be saved.
    * @note Not all data is needed to save. So override this function
    *   to only save certain data.
    */
-  StorableObj.prototype.json = function() {
+  LSObj.prototype.json = function() {
     return JSON.stringify(this);
   };
-  /**
-   * To be overridden.
-   */
-  StorableObj.prototype.genLocalStorageKey = function() {
-  };
-
+ 
  
 
   /**
-   *
+   * class Store
    */
-  function Store(name) {
-    StorableObj.call(this);
+  function Store(name, keyField) {
+    LSObj.call(this);
 
     this.name = name;
-    this.keyEntryMapping = {};
-    // Other properties will be initialized in init()
+    this.keyField = keyField ? keyField : null;
   };
-  Store.prototype = new StorableObj();
+  Store.prototype = new LSObj();
   Store.prototype.constructor = Store;
-  Store.prototype.genLocalStorageKey = function() {
-    if (this.name) {
-      this.lsKey = storeLSKeyPrefix + this.name;
-      return this.lsKey;
+  Store.prototype.put = function(obj) {
+    if (!obj.hasOwnProperty(this.keyField))
+      return false;
+    var entryKey = obj[this.keyField];
+    var entryLSKey = storeGenLocalStorageKeyForEntry(this, entryKey);
+    this.data[entryKey] = entryLSKey;
+    localStorage.setItem(entryLSKey, JSON.stringify(obj));
+    return true;
+  };
+  Store.prototype.del = function(key) {
+    // Try cached mapping first
+    var foundInMapping = true;
+    var entryLSKey = this.data[key];
+    // If not found, generate lsKey on the fly
+    if (!entryLSKey) {
+      entryLSKey = storeGenLocalStorageKeyForEntry(this, key);
+      foundInMapping = false;
+    }
+    localStorage.removeItem(entryLSKey);
+    if (foundInMapping)
+      delete this.data[key]; // Update mapping
+  };
+  Store.prototype.get = function(key, proto) {
+    // Try cached mapping first
+    var foundInMapping = true;
+    var entryLSKey = this.data[key];
+    // If not found, generate lsKey on the fly
+    if (!entryLSKey) {
+      entryLSKey = storeGenLocalStorageKeyForEntry(this, key);
+      foundInMapping = false;
+    }
+    // Retrieve obj from localStorage
+    var obj = LSObj.retrieve(this.data[key], proto);
+    if (obj) {
+      if (!foundInMapping)
+        this.data[key] = entryLSKey;
+      return obj;
+    }
+    if (foundInMapping)
+      delete this.data[key]; // Update mapping
+    return null;
+  };
+  //Store.prototype.filter = function(criteria) {
+  //};
+  Store.prototype.clear = function() {
+    var pat = storeGenLocalStorageKeyPatternForEntry(this);
+    for (each in localStorage) {
+      if (each.match(pat))
+        localStorage.removeItem(each);
+    }
+    this.type = 'obj';
+    this.data = {};
+  };
+  Store.prototype.destroy = function() {
+    this.clear();
+    LSObj.prototype.destroy.call(this);
+  };
+  Store.prototype.json = function() {
+    return JSON.stringify({
+      name: this.name,
+      type: this.type,
+      keyField: this.keyField
+    });
+  };
+  //
+  // Store's "private" methods
+  //
+  function storeGenLocalStorageKey(self) {
+    if (self.name) {
+      self.lsKey = '_lm#s#' + self.name;
+      return self.lsKey;
     }
     return null;
   };
-  Store.prototype.init() {
-    this.genLocalStorageKey();
-    var val = localStorage.getItem(this.lsKey);
-    if (val == 'null' || val == 'undefined')
-      this.create();
+  function storeGenLocalStorageKeyForEntry(self, entryKey) {
+    return storeGenLocalStorageKey(self) + '#' + entryKey;
+  };
+  function storeGenLocalStorageKeyPatternForEntry(self) {
+    return new RegExp('^_lm#s#' + self.name + '#');
+  };
+  /**
+   * Initialize store.
+   */
+  function storeInit(self) {
+    // Check if store exists or not
+    storeGenLocalStorageKey(self);
+    var data = LSObj.retrieve(self.lsKey);
+    if (data)
+      storeLoad(self, data);
     else
-      this.loadFromLocalStorage(val);
+      storeCreate(self);
   };
-  Store.prototype.create() {
-    this.size = 0;
-    this.type = 'str';
-    this.nextSlot = 0;
-    this.recycledSlots = [];
+  function storeCreate(self) {
+    if (!self.keyField)
+      throw "Must provide keyField to create store.";
+    self.type = 'obj';
+    self.data = {};
+    self.save();
   };
-  Store.prototype.loadFromLocalStorage(jsonStr) {
-    var data = JSON.parse(jsonStr);
-    if (data.type != 'str')
-      throw "Store type doesn't match!"; 
+  /**
+   * Initialize store from localStorage.
+   */
+  function storeLoad(self, data) {
+    if (data.type != 'obj')
+      throw "Store type doesn't match: " + data.type + '. Expected: obj';
     
-    this.size = data.size;
-    this.type = 'str';
-    this.nextSlot = data.nextSlot;
-    this.recycledSlots = data.recycledSlots;
+    if (self.keyField && self.keyField != data.keyField)
+      throw "Store with same name '" + self.name + "' but different keyField already exists.";
     
-    var entryKeyPat = createEntryLSKeyRegex(this.name);
-    var entryJsonStr = null;
-    var entry = null;
+    // Load store attributes
+    self.type = 'obj';
+    self.keyField = data.keyField;
+    self.data = {}; // key and lsKey mapping
+    
+    // Load entries
+    var pat = storeGenLocalStorageKeyPatternForEntry(self);
+    var obj = null;
     for (each in localStorage) {
-      if (each.match(entryKeyPat)) {
-        entryJsonStr = localStorage.getItem(each);
-        if (entryJsonStr != 'null' || entryJsonStr != 'undefined') {
-          entry = JSON.parse(entryJsonStr);
-          this.keyEntryMapping[entry.key] = entry.eid;
+      if (each.match(pat)) {
+        obj = LSObj.retrieve(each);
+        if (obj && obj.hasOwnProperty(self.keyField)) {
+          self.data[obj[self.keyField]] = each;
+        }
+        else {
+          localStorage.removeItem(each);
         }
       }
     }
   };
-  Store.prototype.put(key, val) {
-    var entry = this.getEntry_(key);
-    if (entry) {// entry exists
-      entry.value = val;
-    } else {
-      var eid = 0;
-      if (this.recycleSlots.length > 0)
-        eid = this.recycleSlots.shift();
-      else {
-        eid = this.nextSlot;
-        ++ this.nextSlot;
-      }
-      entry = { 'eid': eid, 'key': key, 'value': val };
-      ++ this.size;
-    }
-    var entryLSKey = createEntryLSKey(this.name, entry.eid));
-    localStorage.setItem(entryLSKey, JSON.stringify(entry));
+  
+  
+  
+  function openStore_(storeName, keyField) {
+    var store = new Store(storeName, keyField);
+    storeInit(store);
+    return store;
   };
-  Store.prototype.get(key) {
-    var entry = this.getEntry_(key);
-    return entry ? entry.value : null;
-  };
-  Store.prototype.remove(key) {
-    if (this.keyEntryMapping.hasOwnProperty(key)) {
-      var eid = this.keyEntryMapping[key];
-      localStorage.removeItem(
-        createEntryLSKey(this.name, eid));
-      this.recycledSlots.push(eid); // Recycle the entry id
-      delete this.keyEntryMapping[key];
-    }
-  };
-  Store.prototype.getEntry_(key) {
-    if (this.keyEntryMapping.hasOwnProperty(key)) {
-      var entryJsonStr = localStorage.getItem(
-        createEntryLSKey(this.name, this.keyEntryMapping[key]));
-      if (entryJsonStr != 'null' || entryJsonStr != 'undefined') {
-        var entry = JSON.parse(entryJsonStr);
-        if (entry.key != key)
-          throw "Key not matched.";
-        return entry;
-      }
-    }
-    return null;
-  };
-
-  
-  
-  function ObjStore() {
-    Store.call(this);
-    this.type = 'obj';
-  };
-  ObjStore.prototype = new Store();
-  ObjStore.prototype.constructor = ObjStore;
-
-  
-  
-  
-  
-  function openStore_(storeName) {
-    
-  };
-  
   
   return {
-
-    openStore: openStore_,
-
+    openStore: openStore_
   };
-
 })();
