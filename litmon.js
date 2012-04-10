@@ -1,14 +1,26 @@
 var litmon = (function () {
   "use strict";
-  
   var testmode = false; // Enable this for unit tests.
+  
+  function litmonError(errmsg) {
+    return {
+      name: "litmon Error", 
+      level: "litmon", 
+      message: errmsg, 
+      htmlMessage: errmsg
+    }
+  };
+  
+  function validateAlphanumeric(s) {
+    return s.match(/^[A-Za-z0-9_\.]$/) != null;
+  };
   
   /**
    * @class Base class for localStorage storable classes.
    */
   function LSObj() {
     this.lsKey = null;
-  }
+  };
   LSObj.retrieve = function (lsKey, proto) {
     var val = window.localStorage.getItem(lsKey);
     if (val == 'null' || val == 'undefined') {
@@ -52,6 +64,9 @@ var litmon = (function () {
    * class StoreCore
    */
   function StoreCore(name, keyField, type) {
+    if (!validateAlphanumeric(name)) {
+      throw litmonError("Only alphanumerics, '_', '.', and spaces are allowed in store names");
+    }
     this.name = name;
     this.keyField = keyField ? keyField : null;
     // The following will be set during init
@@ -263,10 +278,12 @@ var litmon = (function () {
   }
   
   return {
-    openStore: openStore_
+    openStore: openStore_,
+    
+    LSObject: LSObj
   };
 })();
 
 // TODO:
-// Move store attributes out of Store class, use a hidden "manager" to manage
-// all stores' attributes.
+// Runtime store
+// Str store
