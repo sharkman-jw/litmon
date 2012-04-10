@@ -1,17 +1,3 @@
-// litmon - a wrapper of localStorage, with not many functionalities
-// Usages:
-// + litmon
-// - Create an objects store: var store = litmon.openStore(storeName, keyField)
-// - Open an existing objects store: var store = litmon.openStore(storeName)
-//
-// + Store 
-// - Put (add or update) an object: store.put(obj)
-// - Get an object: var obj = store.get(key)
-// - Get an object and install prototype: var obj = store.get(key, proto)
-// - Delete an object: store.del(key)
-// - Clear: clear all entries
-// - Destroy: clear all entries and destroy store completely
-
 var litmon = (function () {
   "use strict";
 
@@ -227,6 +213,5 @@ var litmon = (function () {
 // TODO:
 // Move store attributes out of Store class, use a hidden "manager" to manage
 // all stores' attributes.
-//
 
 

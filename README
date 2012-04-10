@@ -1,3 +1,20 @@
+litmon - a wrapper of localStorage, with not many functionalities.
+ 
+Usages:
++ litmon
+- Create an objects store: var store = litmon.openStore(storeName, keyField)
+- Open an existing objects store: var store = litmon.openStore(storeName)
+
++ Store 
+- Put (add or update) an object: store.put(obj)
+- Get an object: var obj = store.get(key)
+- Get an object and install prototype: var obj = store.get(key, proto)
+- Delete an object: store.del(key)
+- Clear: clear all entries
+- Destroy: clear all entries and destroy store completely
+
+
+
 Copyright (C) 2012 Josh Wang
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
