@@ -7,57 +7,66 @@
 <script type="text/javascript" src="http://code.jquery.com/qunit/git/qunit.js"></script>
 <script type="text/javascript" src="litmon.js"></script>
 <script>
+//
+// This test only works when testmode was set to be true in litmon.js
+//
+
 $(document).ready(function(){
 
 module("Store");
 
 test("Create and destroy", function() {
-	var exception_thrown = false;
-	try {
-		litmon.openStore("sites");
-	} catch (err) {
-		exception_thrown = true;
-	}
+  var exception_thrown = false;
+  try {
+    litmon.openStore("sites");
+  } catch (err) {
+    exception_thrown = true;
+  }
   equal(exception_thrown, true,
-	 	'Caught expected exception on creating store without specify keyField');
-	
-	var siteStore = litmon.openStore('sites', 'hostname');
-	equal(localStorage.getItem(siteStore.lsKey), siteStore.json(),
-		'Store was saved to localStorage');
-	
-	var lsKey = siteStore.lsKey;
+    'Caught expected exception on creating store without specify keyField');
+  
+  var siteStore = litmon.openStore('sites', 'hostname');
+  var core = litmon.stores['sites'];
+	equal(localStorage.getItem(core.lsKey), core.json(),
+    'Store was saved to localStorage');
+
+  var lsKey = core.lsKey;
 	siteStore.destroy();
 	equal(localStorage.getItem(lsKey), undefined,
-		'Store was destroyed');
+    'Store was destroyed');
+
+  equal(false, litmon.stores.hasOwnProperty('sites'),
+    'Store was removed from openedStore');
 });
 
 test("Open existing", function() {
   var siteStore = litmon.openStore('sites', 'hostname');
-	var siteStore2 = litmon.openStore('sites');
-	equal(siteStore2.json(), siteStore.json(),
-		'Successfully opened existing store.');
-	siteStore.destroy();
+  var siteStore2 = litmon.openStore('sites');
+  siteStore.destroy();
+  ok(true);
 });
 
 test("Put", function() {
   var siteStore = litmon.openStore('sites', 'hostname');
-	
+
   var site = { hostname: 'facebook.com', name: 'Facebook' };
   siteStore.put(site);
   siteStore.put({ hostname: 'linkedin.com', name: 'Linkedin',
     tags: ['social', 'professional'] });
-	
+
   for (var each in localStorage) {
     if (each.indexOf(site.hostname) != -1) {
-			equal(localStorage.getItem(each), JSON.stringify(site));
+			equal(localStorage.getItem(each), JSON.stringify(site),
+        'entry was successfully put');
 		} else if (each.indexOf('linkedin.com') != -1) {
 			var data = JSON.parse(localStorage.getItem(each));
-			equal(data.hostname, 'linkedin.com');
+			equal(data.hostname, 'linkedin.com',
+        'entry was successfully put');
 		}
 	}
-	
+
 	siteStore.destroy();
-	
+
 	// To Test
 	// - duplicate put
 	// - put obj without keyField
@@ -65,14 +74,14 @@ test("Put", function() {
 
 test("Destroy", function() {
 	var siteStore = litmon.openStore('sites', 'hostname');
-	
+
   var site = { hostname: 'facebook.com', name: 'Facebook' };
   siteStore.put(site);
   siteStore.put({ hostname: 'linkedin.com', name: 'Linkedin',
     tags: ['social', 'professional'] });
   
 	siteStore.destroy();
-	
+
 	var found = false;
 	for (var each in localStorage) {
 		if (each.indexOf(site.hostname) != -1) {
@@ -81,38 +90,38 @@ test("Destroy", function() {
 			found = true;
 		}
 	}
-	
+
 	equal(found, false, 'All entries were cleared too');
 });
 
 test("Get", function() {
   var siteStore = litmon.openStore('sites', 'hostname');
-	
-	siteStore.put({ hostname: 'linkedin.com', name: 'Linkedin',
-	 	tags: ['social', 'professional'] });
-	equal(siteStore.get('linkedin.com').name, 'Linkedin', 'Retrieved data correctly');
-	equal(siteStore.get('linkedin.com').tags.length, 2, 'Retrieved data correctly');	
-	
-	function Site(hostname) {
-		this.hostname = hostname;
-		this.value = 0;
-	};
-	Site.prototype.json = function() {
-		return JSON.stringify({
-			hostname: this.hostname,
-			value: this.value
-		});
-	};
-	
-	var site = new Site('facebook.com');
-	site.value = '100b';
-	siteStore.put(site);
-	
-	equal(siteStore.get(site.hostname, Site.prototype).json(),
-		site.json(), 'Prototype installed correctly');
-	
-	siteStore.destroy();
-		
+
+  siteStore.put({ hostname: 'linkedin.com', name: 'Linkedin',
+    tags: ['social', 'professional'] });
+  var obj = siteStore.get('linkedin.com');
+  equal(obj.name, 'Linkedin', 'Retrieved data correctly');
+  equal(obj.tags.length, 2, 'Retrieved data correctly');	
+
+  function Site(hostname) {
+    this.hostname = hostname;
+    this.value = 0;
+  };
+  Site.prototype.json = function() {
+    return JSON.stringify({
+      hostname: this.hostname,
+      value: this.value
+    });
+  };
+
+  var site = new Site('facebook.com');
+  site.value = '100b';
+  siteStore.put(site);
+  obj = siteStore.get(site.hostname, Site.prototype);
+  equal(obj.json(), site.json(), 'Prototype installed correctly');
+
+  siteStore.destroy();
+
 	// To test:
 	// - get by non-key field
 	// - get non existing obj
@@ -122,12 +131,12 @@ test('Del', function() {
 	var stockStore = litmon.openStore('stocks', 'symbol');
 	stockStore.put({ hostname: 'apple.com', name: 'Apple', symbol: 'AAPL' });
 	stockStore.put({ value: '100b', name: 'Facebook', ceo: 'Mark', symbol: 'FB' });
-	
+
 	stockStore.del('FB');
 	equal(stockStore.get('FB'), null, 'Obj deleted.')
-	
+
 	stockStore.destroy();
-	
+
 	// To test:
 	// - del by non-key field
 });
