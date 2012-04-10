@@ -1,6 +1,8 @@
 var litmon = (function () {
   "use strict";
-
+  
+  var testmode = false; // Enable this for unit tests.
+  
   /**
    * @class Base class for localStorage storable classes.
    */
@@ -43,135 +45,126 @@ var litmon = (function () {
   LSObj.prototype.json = function() {
     return JSON.stringify(this);
   };
- 
- 
-
+  
+  
+  
   /**
-   * class Store
+   * class StoreCore
    */
-  function Store(name, keyField) {
-    LSObj.call(this);
-
+  function StoreCore(name, keyField, type) {
     this.name = name;
     this.keyField = keyField ? keyField : null;
+    // The following will be set during init
+    //this.type = type ? type : 'obj';
+    //this.cached = {}; // Cached key - 
   }
-  Store.prototype = new LSObj();
-  Store.prototype.constructor = Store;
-  Store.prototype.put = function(obj) {
+  StoreCore.prototype = new LSObj();
+  StoreCore.prototype.constructor = StoreCore;
+  StoreCore.prototype.put = function(obj) {
     if (!obj.hasOwnProperty(this.keyField)) {
-      return false;
+      return false; // Skip if input obj doesn't have key field
     }
     var entryKey = obj[this.keyField];
-    var entryLSKey = storeGenLocalStorageKeyForEntry(this, entryKey);
-    this.data[entryKey] = entryLSKey;
+    var entryLSKey = storeCore_makeLSKeyForEntry(this, entryKey);
+    this.cached[entryKey] = entryLSKey;
     window.localStorage.setItem(entryLSKey, JSON.stringify(obj));
     return true;
   };
-  Store.prototype.del = function(key) {
-    // Try cached mapping first
-    var foundInMapping = true;
-    var entryLSKey = this.data[key];
-    // If not found, generate lsKey on the fly
-    if (!entryLSKey) {
-      entryLSKey = storeGenLocalStorageKeyForEntry(this, key);
-      foundInMapping = false;
+  StoreCore.prototype.del = function(key) {
+    // Try to retrieve lsKey from cached mapping
+    var found = true;
+    var entryLSKey = this.cached[key];
+    if (!entryLSKey) { // Not found, make the lsKey on the fly
+      entryLSKey = storeCore_makeLSKeyForEntry(this, key);
+      found = false;
     }
     window.localStorage.removeItem(entryLSKey);
-    if (foundInMapping) {
-      delete this.data[key]; // Update mapping
+    if (found) {
+      delete this.cached[key]; // Update cached data
     }
   };
-  Store.prototype.get = function(key, proto) {
-    // Try cached mapping first
-    var foundInMapping = true;
-    var entryLSKey = this.data[key];
-    // If not found, generate lsKey on the fly
-    if (!entryLSKey) {
-      entryLSKey = storeGenLocalStorageKeyForEntry(this, key);
-      foundInMapping = false;
+  StoreCore.prototype.get = function(key, proto) {
+    // Try to retrieve lsKey from cached mapping
+    var found = true;
+    var entryLSKey = this.cached[key];
+    if (!entryLSKey) { // Not found, make the lsKey on the fly
+      entryLSKey = storeCore_makeLSKeyForEntry(this, key);
+      found = false;
     }
     // Retrieve obj from localStorage
-    var obj = LSObj.retrieve(this.data[key], proto);
-    if (obj) {
-      if (!foundInMapping)
-        this.data[key] = entryLSKey;
-      return obj;
+    var obj = LSObj.retrieve(entryLSKey, proto);
+    if (obj) { // Got entry
+      if (!found) { // But not found in mapping
+        this.cached[key] = entryLSKey; // Update mapping
+      }
+    } else if (found) { // No such entry, but found in mapping
+      delete this.cached[key]; // Remove bad key - lsKey mapping
     }
-    if (foundInMapping) {
-      delete this.data[key]; // Update mapping
-    }
-    return null;
+    return obj;
   };
   //Store.prototype.filter = function(criteria) {
+  // TODO
   //};
-  Store.prototype.clear = function() {
-    var pat = storeGenLocalStorageKeyPatternForEntry(this),
-      each;
+  StoreCore.prototype.clear = function() {
+    var pat = storeCore_makeLSKeyPatternForEntry(this);
+    var each;
     for (each in window.localStorage) {
-      if (each.match(pat))
+      if (each.match(pat)) {
         window.localStorage.removeItem(each);
+      }
     }
     this.type = 'obj';
-    this.data = {};
+    this.cached = {};
   };
-  Store.prototype.destroy = function() {
+  StoreCore.prototype.destroy = function() {
     this.clear();
-    console.log("All entries cleared.")
     LSObj.prototype.destroy.call(this);
-    console.log("localStorage cleared.")
+    this.name = null;
   };
-  Store.prototype.json = function() {
+  StoreCore.prototype.json = function() {
     return JSON.stringify({
       name: this.name,
-      type: this.type,
-      keyField: this.keyField
+      keyField: this.keyField,
+      type: this.type
     });
   };
   //
-  // Store's "private" methods
+  // StoreCore's "private" methods
   //
-  function storeGenLocalStorageKey(self) {
+  function storeCore_makeLSKey(self) {
     if (self.name) {
       self.lsKey = '_lm#s#' + self.name;
       return self.lsKey;
     }
     return null;
   };
-  function storeGenLocalStorageKeyForEntry(self, entryKey) {
-    return storeGenLocalStorageKey(self) + '#' + entryKey;
+  function storeCore_makeLSKeyForEntry(self, entryKey) {
+    return storeCore_makeLSKey(self) + '#' + entryKey;
   };
-  function storeGenLocalStorageKeyPatternForEntry(self) {
+  function storeCore_makeLSKeyPatternForEntry(self) {
     return new RegExp('^_lm#s#' + self.name + '#');
   };
-  /**
-   * Initialize store.
-   */
-  function storeInit(self) {
-    // Check if store exists or not
-    storeGenLocalStorageKey(self);
-    var data = LSObj.retrieve(self.lsKey);
-    if (data) {
-      storeLoad(self, data);
-    } else {
-      storeCreate(self);
+  function storeCore_init(self) {
+    storeCore_makeLSKey(self);
+    var obj = LSObj.retrieve(self.lsKey);
+    if (obj) { // Opening existing store
+      storeCore_load(self, obj);
+    } else { // Create new store
+      storeCore_create(self);
     }
   };
-  function storeCreate(self) {
+  function storeCore_create(self) {
     if (!self.keyField) {
       throw "Must provide keyField to create store.";
     }
     self.type = 'obj';
-    self.data = {};
+    self.cached = {};
     self.save();
   };
-  /**
-   * Initialize store from localStorage.
-   */
-  function storeLoad(self, data) {
+  function storeCore_load(self, data) {
     if (data.type != 'obj') {
-      throw "Store type doesn't match: " + data.type + '. Expected: obj';
+      throw "Store with same name '" + self.name + "' but different data type already exists.";
     }
-    
     if (self.keyField && self.keyField != data.keyField) {
       throw "Store with same name '" + self.name + "' but different keyField already exists.";
     }
@@ -179,9 +172,10 @@ var litmon = (function () {
     // Load store attributes
     self.type = 'obj';
     self.keyField = data.keyField;
-    self.data = {}; // key and lsKey mapping
+    self.cached = {}; // key and lsKey mapping
     
     // Load entries
+    /* To improve init performace, we don't preload all existing entries
     var pat = storeGenLocalStorageKeyPatternForEntry(self),
       obj, each;
     for (each in window.localStorage) {
@@ -194,16 +188,79 @@ var litmon = (function () {
           window.localStorage.removeItem(each);
         }
       }
+    }*/
+  };
+  
+  var openedStores = {};
+
+  /**
+   * class Store: an accessor to StoreCore
+   */
+  function Store(name, keyField) {
+    this.name = name;
+    var store = openedStores[name];
+    if (store) { // Store already opened
+      if (keyField && keyField != store.keyField) {
+        throw "Store with same name '" + store.name + "' but different keyField already exists.";
+      }
+    } else { // Store not open
+      store = new StoreCore(name, keyField);
+      storeCore_init(store);
+      openedStores[name] = store;
+    }
+  }
+  Store.prototype.put = function(obj) {
+    var store = openedStores[this.name];
+    if (store) {
+      return store.put(obj);
+    } else {
+      throw 'Store not exists anymore';
+    }
+  };
+  Store.prototype.del = function(key) {
+    var store = openedStores[this.name];
+    if (store) {
+      store.del(key);
+    } else {
+      throw 'Store not exists anymore';
+    }
+  };
+  Store.prototype.get = function(key, proto) {
+    var store = openedStores[this.name];
+    if (store) {
+      return store.get(key, proto);
+    } else {
+      throw 'Store not exists anymore';
+    }
+  };
+  Store.prototype.clear = function() {
+    var store = openedStores[this.name];
+    if (store) {
+      store.clear();
+    } else {
+      throw 'Store not exists anymore';
+    }
+  };
+  Store.prototype.destroy = function() {
+    var store = openedStores[this.name];
+    if (store) {
+      store.destroy();
+      delete openedStores[this.name];
     }
   };
   
   
   
   function openStore_(storeName, keyField) {
-    var store = new Store(storeName, keyField);
-    storeInit(store);
-    return store;
+    return new Store(storeName, keyField);
   };
+  
+  if (testmode) {
+    return {
+      openStore: openStore_,
+      stores: openedStores
+    };
+  }
   
   return {
     openStore: openStore_
@@ -213,5 +270,3 @@ var litmon = (function () {
 // TODO:
 // Move store attributes out of Store class, use a hidden "manager" to manage
 // all stores' attributes.
-
-
