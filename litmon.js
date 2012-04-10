@@ -12,7 +12,7 @@ var litmon = (function () {
   };
   
   function validateAlphanumeric(s) {
-    return s.match(/^[A-Za-z0-9_\.]$/) != null;
+    return s.match(/^[A-Za-z0-9_\.]+$/) != null;
   };
   
   /**
@@ -170,7 +170,7 @@ var litmon = (function () {
   };
   function storeCore_create(self) {
     if (!self.keyField) {
-      throw "Must provide keyField to create store.";
+      throw litmonError("Must provide keyField to create store.");
     }
     self.type = 'obj';
     self.cached = {};
@@ -178,10 +178,10 @@ var litmon = (function () {
   };
   function storeCore_load(self, data) {
     if (data.type != 'obj') {
-      throw "Store with same name '" + self.name + "' but different data type already exists.";
+      throw litmonError("Store with same name '" + self.name + "' but different data type already exists.");
     }
     if (self.keyField && self.keyField != data.keyField) {
-      throw "Store with same name '" + self.name + "' but different keyField already exists.";
+      throw litmonError("Store with same name '" + self.name + "' but different keyField already exists.");
     }
     
     // Load store attributes
@@ -216,7 +216,7 @@ var litmon = (function () {
     var store = openedStores[name];
     if (store) { // Store already opened
       if (keyField && keyField != store.keyField) {
-        throw "Store with same name '" + store.name + "' but different keyField already exists.";
+        throw litmonError("Store with same name '" + store.name + "' but different keyField already exists.");
       }
     } else { // Store not open
       store = new StoreCore(name, keyField);
@@ -229,7 +229,7 @@ var litmon = (function () {
     if (store) {
       return store.put(obj);
     } else {
-      throw 'Store not exists anymore';
+      throw litmonError("Store '" + name + "' not exists (anymore).");
     }
   };
   Store.prototype.del = function(key) {
@@ -237,7 +237,7 @@ var litmon = (function () {
     if (store) {
       store.del(key);
     } else {
-      throw 'Store not exists anymore';
+      throw litmonError("Store '" + name + "' not exists (anymore).");
     }
   };
   Store.prototype.get = function(key, proto) {
@@ -245,7 +245,7 @@ var litmon = (function () {
     if (store) {
       return store.get(key, proto);
     } else {
-      throw 'Store not exists anymore';
+      throw litmonError("Store '" + name + "' not exists (anymore).");
     }
   };
   Store.prototype.clear = function() {
@@ -253,7 +253,7 @@ var litmon = (function () {
     if (store) {
       store.clear();
     } else {
-      throw 'Store not exists anymore';
+      throw litmonError("Store '" + name + "' not exists (anymore).");
     }
   };
   Store.prototype.destroy = function() {
