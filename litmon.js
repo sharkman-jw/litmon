@@ -1,33 +1,53 @@
-var litmon = (function() {
+// litmon - a wrapper of localStorage, with not many functionalities
+// Usages:
+// + litmon
+// - Create an objects store: var store = litmon.openStore(storeName, keyField)
+// - Open an existing objects store: var store = litmon.openStore(storeName)
+//
+// + Store 
+// - Put (add or update) an object: store.put(obj)
+// - Get an object: var obj = store.get(key)
+// - Get an object and install prototype: var obj = store.get(key, proto)
+// - Delete an object: store.del(key)
+// - Clear: clear all entries
+// - Destroy: clear all entries and destroy store completely
+
+var litmon = (function () {
+  "use strict";
 
   /**
    * @class Base class for localStorage storable classes.
    */
   function LSObj() {
     this.lsKey = null;
-  };
-  LSObj.retrieve = function(lsKey, classPrototype) {
-    var val = localStorage.getItem(lsKey);
-    if (val == 'null' || val == 'undefined')
+  }
+  LSObj.retrieve = function (lsKey, proto) {
+    var val = window.localStorage.getItem(lsKey);
+    if (val == 'null' || val == 'undefined') {
       return null;
-    obj = JSON.parse(val);
-    if (classPrototype)
-      obj.__proto__ = classPrototype;
+    }
+    var obj = JSON.parse(val);
+    if (proto) {
+      obj.__proto__ = proto;
+    }
     return obj;
   };
   /**
    * Save entry to local storage.
    */
   LSObj.prototype.save = function() {
-    if (this.lsKey)
-      localStorage.setItem(this.lsKey, this.json());
+    if (this.lsKey) {
+      window.localStorage.setItem(this.lsKey, this.json());
+    }
   };
   /**
    * Remove entry from local storage.
    */
   LSObj.prototype.destroy = function() {
-    if (this.lsKey)
-      localStorage.removeItem(this.lsKey);
+    if (this.lsKey) {
+      window.localStorage.removeItem(this.lsKey);
+      this.lsKey = null;
+    }
   };
   /**
    * JSON string of data to be saved.
@@ -48,16 +68,17 @@ var litmon = (function() {
 
     this.name = name;
     this.keyField = keyField ? keyField : null;
-  };
+  }
   Store.prototype = new LSObj();
   Store.prototype.constructor = Store;
   Store.prototype.put = function(obj) {
-    if (!obj.hasOwnProperty(this.keyField))
+    if (!obj.hasOwnProperty(this.keyField)) {
       return false;
+    }
     var entryKey = obj[this.keyField];
     var entryLSKey = storeGenLocalStorageKeyForEntry(this, entryKey);
     this.data[entryKey] = entryLSKey;
-    localStorage.setItem(entryLSKey, JSON.stringify(obj));
+    window.localStorage.setItem(entryLSKey, JSON.stringify(obj));
     return true;
   };
   Store.prototype.del = function(key) {
@@ -69,9 +90,10 @@ var litmon = (function() {
       entryLSKey = storeGenLocalStorageKeyForEntry(this, key);
       foundInMapping = false;
     }
-    localStorage.removeItem(entryLSKey);
-    if (foundInMapping)
+    window.localStorage.removeItem(entryLSKey);
+    if (foundInMapping) {
       delete this.data[key]; // Update mapping
+    }
   };
   Store.prototype.get = function(key, proto) {
     // Try cached mapping first
@@ -89,24 +111,28 @@ var litmon = (function() {
         this.data[key] = entryLSKey;
       return obj;
     }
-    if (foundInMapping)
+    if (foundInMapping) {
       delete this.data[key]; // Update mapping
+    }
     return null;
   };
   //Store.prototype.filter = function(criteria) {
   //};
   Store.prototype.clear = function() {
-    var pat = storeGenLocalStorageKeyPatternForEntry(this);
-    for (each in localStorage) {
+    var pat = storeGenLocalStorageKeyPatternForEntry(this),
+      each;
+    for (each in window.localStorage) {
       if (each.match(pat))
-        localStorage.removeItem(each);
+        window.localStorage.removeItem(each);
     }
     this.type = 'obj';
     this.data = {};
   };
   Store.prototype.destroy = function() {
     this.clear();
+    console.log("All entries cleared.")
     LSObj.prototype.destroy.call(this);
+    console.log("localStorage cleared.")
   };
   Store.prototype.json = function() {
     return JSON.stringify({
@@ -138,14 +164,16 @@ var litmon = (function() {
     // Check if store exists or not
     storeGenLocalStorageKey(self);
     var data = LSObj.retrieve(self.lsKey);
-    if (data)
+    if (data) {
       storeLoad(self, data);
-    else
+    } else {
       storeCreate(self);
+    }
   };
   function storeCreate(self) {
-    if (!self.keyField)
+    if (!self.keyField) {
       throw "Must provide keyField to create store.";
+    }
     self.type = 'obj';
     self.data = {};
     self.save();
@@ -154,11 +182,13 @@ var litmon = (function() {
    * Initialize store from localStorage.
    */
   function storeLoad(self, data) {
-    if (data.type != 'obj')
+    if (data.type != 'obj') {
       throw "Store type doesn't match: " + data.type + '. Expected: obj';
+    }
     
-    if (self.keyField && self.keyField != data.keyField)
+    if (self.keyField && self.keyField != data.keyField) {
       throw "Store with same name '" + self.name + "' but different keyField already exists.";
+    }
     
     // Load store attributes
     self.type = 'obj';
@@ -166,16 +196,16 @@ var litmon = (function() {
     self.data = {}; // key and lsKey mapping
     
     // Load entries
-    var pat = storeGenLocalStorageKeyPatternForEntry(self);
-    var obj = null;
-    for (each in localStorage) {
+    var pat = storeGenLocalStorageKeyPatternForEntry(self),
+      obj, each;
+    for (each in window.localStorage) {
       if (each.match(pat)) {
         obj = LSObj.retrieve(each);
         if (obj && obj.hasOwnProperty(self.keyField)) {
           self.data[obj[self.keyField]] = each;
         }
         else {
-          localStorage.removeItem(each);
+          window.localStorage.removeItem(each);
         }
       }
     }
@@ -193,3 +223,10 @@ var litmon = (function() {
     openStore: openStore_
   };
 })();
+
+// TODO:
+// Move store attributes out of Store class, use a hidden "manager" to manage
+// all stores' attributes.
+//
+
+
